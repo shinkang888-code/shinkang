@@ -1,0 +1,12 @@
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  output: "standalone", // produces .next/standalone for minimal Docker image
+  experimental: {
+    serverActions: { allowedOrigins: ["localhost:3001", "localhost:3000"] },
+  },
+  // Keep bcryptjs & prisma client server-side only
+  serverExternalPackages: ["bcryptjs", "@prisma/client", ".prisma"],
+};
+
+export default nextConfig;

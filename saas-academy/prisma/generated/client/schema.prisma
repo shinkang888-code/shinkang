@@ -1,0 +1,144 @@
+// ─────────────────────────────────────────────────────────────
+// Prisma Schema — Academy SaaS Multi-Tenant
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
+enum AcademyStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum InviteRole {
+  ADMIN
+  TEACHER
+}
+
+// ─── Academy (Tenant Root) ───────────────────────────────────
+
+model Academy {
+  id        String        @id @default(uuid())
+  name      String
+  code      String        @unique
+  status    AcademyStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  users     User[]
+  invites   Invite[]
+  sessions  Session[]
+  auditLogs AuditLog[]
+
+  @@index([code])
+  @@index([status])
+  @@map("academies")
+}
+
+// ─── User ────────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(uuid())
+  academyId    String? // null only for SUPER_ADMIN
+  role         UserRole
+  name         String
+  email        String     @unique
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  academy        Academy?   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  sessions       Session[]
+  invitesCreated Invite[]   @relation("InviteCreator")
+  actorLogs      AuditLog[] @relation("AuditActor")
+
+  @@index([academyId])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+// ─── Session (Refresh Token Storage) ────────────────────────
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  academyId String?
+  tokenHash String    @unique
+  ip        String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academy Academy? @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("sessions")
+}
+
+// ─── Invite ───────────────────────────────────────────────────
+
+model Invite {
+  id          String     @id @default(uuid())
+  academyId   String
+  role        InviteRole
+  tokenHash   String     @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String
+  createdAt   DateTime   @default(now())
+
+  academy   Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("InviteCreator", fields: [createdById], references: [id])
+
+  @@index([tokenHash])
+  @@index([academyId])
+  @@map("invites")
+}
+
+// ─── AuditLog ────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  academyId   String?
+  action      String
+  targetType  String?
+  targetId    String?
+  metaJson    Json?
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  actor   User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  academy Academy? @relation(fields: [academyId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([academyId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,696 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Prisma Schema – Multi-tenant Academy SaaS
+// ─────────────────────────────────────────────────────────────────────────────
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl is used by Prisma Migrate when DATABASE_URL points to a pgBouncer
+  // pooler (Supabase). Leave unset for local/Docker development.
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum AcademyStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
+
+enum NotificationChannel {
+  KAKAO_ALIM
+  EMAIL
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Academy {
+  id        String        @id @default(uuid())
+  name      String
+  code      String        @unique          // short code used at signup e.g. "ALPHA-42"
+  status    AcademyStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  users              User[]
+  invites            Invite[]
+  auditLogs          AuditLog[]
+  sessions           Session[]
+  notifications      Notification[]
+  tuitionPlans       TuitionPlan[]
+  subscriptions      StudentSubscription[]
+  paymentMethods     PaymentMethod[]
+  invoices           Invoice[]
+  paymentAttempts    PaymentAttempt[]
+  webhookEvents      WebhookEvent[]
+  classes              Class[]
+  classSchedules       ClassSchedule[]
+  classEnrollments     ClassEnrollment[]
+  classSessions        ClassSession[]
+  attendances          Attendance[]
+  attendanceHistories  AttendanceHistory[]
+  parentContacts       ParentContact[]
+  notificationSettings AcademyNotificationSettings?
+  alimtalkTemplates    AlimtalkTemplate[]
+  notificationQueue    NotificationQueue[]
+
+  @@index([code])
+  @@index([status])
+  @@map("academies")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  academyId    String?                          // NULL only for SUPER_ADMIN
+  role         UserRole
+  name         String
+  email        String     @unique
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  academy             Academy?              @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  sessions            Session[]
+  auditLogs           AuditLog[]            @relation("ActorLogs")
+  invitesCreated      Invite[]              @relation("InviteCreator")
+  notifications       Notification[]        @relation("NotificationRecipient")
+  subscriptions       StudentSubscription[]
+  paymentMethods      PaymentMethod[]
+  taughtClasses       Class[]               @relation("ClassTeacher")
+  classEnrollments    ClassEnrollment[]     @relation("EnrolledStudent")
+  attendancesAsStudent Attendance[]         @relation("AttendanceStudent")
+  attendancesMarked   Attendance[]          @relation("AttendanceMarker")
+  attendanceEdits     AttendanceHistory[]   @relation("AttendanceEditor")
+  parentContacts      ParentContact[]       @relation("StudentParentContacts")
+
+  @@index([email])
+  @@index([academyId])
+  @@index([academyId, role])
+  @@index([academyId, role, status])       // KPI: active/new student counts
+  @@index([academyId, role, createdAt])   // KPI: new students in range
+  @@map("users")
+}
+
+/// Per-device refresh-token record; rotated on every /auth/refresh call.
+model Session {
+  id               String    @id @default(uuid())
+  userId           String
+  academyId        String?
+  refreshTokenHash String    @unique
+  userAgent        String?   @db.Text
+  ip               String?
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academy Academy? @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([academyId])
+  @@map("sessions")
+}
+
+/// Single-use invite token for TEACHER / ADMIN signup.
+model Invite {
+  id         String    @id @default(uuid())
+  academyId  String
+  role       UserRole                          // TEACHER or ADMIN
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  createdBy  String
+
+  academy    Academy   @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  creator    User      @relation("InviteCreator", fields: [createdBy], references: [id])
+
+  @@index([tokenHash])
+  @@index([academyId])
+  @@map("invites")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  academyId   String?
+  action      String                          // e.g. "user.suspend", "academy.create"
+  targetType  String?                         // e.g. "User", "Academy"
+  targetId    String?
+  metaJson    Json?
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  actor   User?    @relation("ActorLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  academy Academy? @relation(fields: [academyId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([academyId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Kakao / Notification ─────────────────────────────────────────────────────
+
+model Notification {
+  id           String              @id @default(uuid())
+  academyId    String
+  recipientId  String?             // target User.id (optional – can be phone-only)
+  channel      NotificationChannel @default(KAKAO_ALIM)
+  templateCode String
+  params       Json                // template variable key/value pairs
+  phone        String              // recipient phone number
+  status       NotificationStatus  @default(PENDING)
+  attempts     Int                 @default(0)
+  lastError    String?             @db.Text
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  academy   Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  recipient User?   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([academyId])
+  @@index([status])
+  @@index([recipientId])
+  @@map("notifications")
+}
+
+// ─── Login attempt tracking (for account lockout) ────────────────────────────
+
+model LoginAttempt {
+  id          String    @id @default(uuid())
+  email       String
+  ip          String?
+  success     Boolean   @default(false)
+  lockedUntil DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@index([email, createdAt])
+  @@map("login_attempts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BILLING DOMAIN
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELED
+}
+
+enum PaymentMethodStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+}
+
+enum AttemptStatus {
+  REQUESTED
+  SUCCESS
+  FAILED
+}
+
+enum WebhookProcessingStatus {
+  PENDING
+  DONE
+  ERROR
+}
+
+/// Monthly tuition plan defined by an academy.
+model TuitionPlan {
+  id         String   @id @default(uuid())
+  academyId  String
+  name       String
+  amount     Int                      // KRW (or smallest currency unit)
+  currency   String   @default("KRW")
+  billingDay Int                      // 1-28: day of month to charge
+  graceDays  Int      @default(3)     // days after dueDate before marking FAILED
+  lateFee    Int      @default(0)     // extra KRW after grace period (optional)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  academy       Academy               @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  subscriptions StudentSubscription[]
+  invoices      Invoice[]
+
+  @@index([academyId])
+  @@index([academyId, isActive])
+  @@map("tuition_plans")
+}
+
+/// One student enrolled in one plan inside one academy.
+model StudentSubscription {
+  id              String             @id @default(uuid())
+  academyId       String
+  studentUserId   String
+  planId          String
+  status          SubscriptionStatus @default(ACTIVE)
+  startDate       DateTime           @db.Date
+  endDate         DateTime?          @db.Date
+  nextBillingDate DateTime           @db.Date
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  academy  Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  student  User        @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  plan     TuitionPlan @relation(fields: [planId], references: [id])
+  invoices Invoice[]
+
+  @@index([academyId, studentUserId, status])
+  @@index([academyId, nextBillingDate])
+  @@map("student_subscriptions")
+}
+
+/// Stored Toss billingKey for a student (one active per student per academy).
+model PaymentMethod {
+  id            String              @id @default(uuid())
+  academyId     String
+  studentUserId String
+  provider      String              @default("TOSS_PAYMENTS")
+  customerKey   String              // stable per-student Toss customer key
+  billingKey    String              // returned by Toss after card auth
+  status        PaymentMethodStatus @default(ACTIVE)
+  last4         String?
+  cardBrand     String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  academy  Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  student  User    @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([academyId, customerKey])
+  @@index([academyId, studentUserId, status])
+  @@map("payment_methods")
+}
+
+/// One billing cycle invoice.
+model Invoice {
+  id                 String        @id @default(uuid())
+  academyId          String
+  subscriptionId     String
+  studentUserId      String
+  planId             String
+  amount             Int
+  dueDate            DateTime      @db.Date
+  status             InvoiceStatus @default(PENDING)
+  paidAt             DateTime?
+  providerPaymentKey String?
+  orderId            String        @unique  // our unique charge-group id
+  retryCount         Int           @default(0)
+  maxRetries         Int           @default(3)
+  nextRetryAt        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  academy      Academy             @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  subscription StudentSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  plan         TuitionPlan         @relation(fields: [planId], references: [id])
+  attempts     PaymentAttempt[]
+
+  @@index([academyId, dueDate, status])
+  @@index([academyId, status, paidAt])    // KPI: revenue queries
+  @@index([academyId, status, updatedAt]) // KPI: failed invoices in range
+  @@index([orderId])
+  @@map("invoices")
+}
+
+/// Individual charge call log per invoice.
+model PaymentAttempt {
+  id                    String        @id @default(uuid())
+  academyId             String
+  invoiceId             String
+  attemptNo             Int
+  requestedAt           DateTime      @default(now())
+  status                AttemptStatus @default(REQUESTED)
+  providerTransactionId String?
+  providerPaymentKey    String?
+  errorCode             String?
+  errorMessage          String?       @db.Text
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([academyId])
+  @@map("payment_attempts")
+}
+
+/// Raw webhook events from Toss – store first, process async.
+model WebhookEvent {
+  id               String                  @id @default(uuid())
+  provider         String                  @default("TOSS_PAYMENTS")
+  eventType        String
+  payloadJson      Json
+  receivedAt       DateTime                @default(now())
+  processedAt      DateTime?
+  processingStatus WebhookProcessingStatus @default(PENDING)
+  errorMessage     String?                 @db.Text
+
+  academyId String?
+  academy   Academy? @relation(fields: [academyId], references: [id], onDelete: SetNull)
+
+  @@index([provider, eventType])
+  @@index([processingStatus])
+  @@map("webhook_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATTENDANCE NOTIFICATION DOMAIN
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ParentRelationship {
+  MOTHER
+  FATHER
+  GUARDIAN
+  ETC
+}
+
+enum ContactStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AlimtalkTemplateType {
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum NotificationQueueStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum NotificationQueueChannel {
+  KAKAO_ALIMTALK
+}
+
+enum NotificationEventType {
+  ATTENDANCE
+}
+
+/// Parent/guardian contact record for a student.
+model ParentContact {
+  id                  String             @id @default(uuid())
+  academyId           String
+  studentUserId       String
+  name                String
+  phone               String             // normalized: 01012345678
+  relationship        ParentRelationship @default(ETC)
+  notificationOptIn   Boolean            @default(false)
+  consentRecordedAt   DateTime?
+  preferredLanguage   String             @default("KO")
+  status              ContactStatus      @default(ACTIVE)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  student User    @relation("StudentParentContacts", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@index([academyId, studentUserId])
+  @@index([academyId, phone])
+  @@map("parent_contacts")
+}
+
+/// Per-academy toggle & policy for attendance notifications.
+model AcademyNotificationSettings {
+  id                        String   @id @default(uuid())
+  academyId                 String   @unique
+  alimtalkEnabled           Boolean  @default(false)
+  sendOnAbsent              Boolean  @default(true)
+  sendOnLate                Boolean  @default(true)
+  sendOnExcused             Boolean  @default(false)
+  allowResendOnStatusChange Boolean  @default(false)
+  quietHoursEnabled         Boolean  @default(true)
+  quietHoursStart           String   @default("21:00") // HH:mm KST
+  quietHoursEnd             String   @default("08:00") // HH:mm KST
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  @@map("academy_notification_settings")
+}
+
+/// Kakao AlimTalk template registration per academy per attendance type.
+model AlimtalkTemplate {
+  id           String               @id @default(uuid())
+  academyId    String
+  type         AlimtalkTemplateType
+  templateCode String               // code registered in Kakao BizMessage portal
+  senderKey    String               // channel sender key
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  @@unique([academyId, type])
+  @@index([academyId])
+  @@map("alimtalk_templates")
+}
+
+/// Outbound notification job queue – one row per intended delivery.
+model NotificationQueue {
+  id              String                   @id @default(uuid())
+  academyId       String
+  channel         NotificationQueueChannel @default(KAKAO_ALIMTALK)
+  eventType       NotificationEventType    @default(ATTENDANCE)
+
+  // Source references (nullable – kept for dedup & audit)
+  attendanceId    String?   // FK to Attendance (logical, no hard FK to keep schema portable)
+  attendanceStatus String?  // the status that triggered this queue item (ABSENT/LATE/EXCUSED)
+  studentUserId   String?
+  parentContactId String?   // FK to ParentContact (logical)
+
+  // Delivery target
+  recipientPhone  String
+  templateCode    String
+  senderKey       String
+  templateVarsJson Json     // { academyName, studentName, ... }
+
+  // Lifecycle
+  status          NotificationQueueStatus  @default(PENDING)
+  attempts        Int                      @default(0)
+  maxAttempts     Int                      @default(3)
+  nextRetryAt     DateTime?
+  scheduledAt     DateTime                 @default(now())
+  processedAt     DateTime?
+  providerMsgKey  String?
+  errorCode       String?
+  errorMessage    String?                  @db.Text
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+
+  @@index([academyId, status])
+  @@index([status, nextRetryAt])
+  @@index([attendanceId])
+  @@index([academyId, attendanceId, attendanceStatus])
+  @@map("notification_queue")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATTENDANCE DOMAIN
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ClassStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  PAUSED
+  DROPPED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  CANCELED
+  COMPLETED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+/// A class (course) offered by an academy.
+model Class {
+  id            String      @id @default(uuid())
+  academyId     String
+  name          String
+  teacherUserId String?
+  status        ClassStatus @default(ACTIVE)
+  capacity      Int?
+  startDate     DateTime    @db.Date
+  endDate       DateTime?   @db.Date
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  academy     Academy            @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  teacher     User?              @relation("ClassTeacher", fields: [teacherUserId], references: [id], onDelete: SetNull)
+  schedules   ClassSchedule[]
+  enrollments ClassEnrollment[]
+  sessions    ClassSession[]
+  attendances Attendance[]
+
+  @@index([academyId, teacherUserId])
+  @@index([academyId, status])
+  @@map("classes")
+}
+
+/// Weekly (or one-off) schedule rule for a Class.
+model ClassSchedule {
+  id          String   @id @default(uuid())
+  academyId   String
+  classId     String
+  daysOfWeek  Int[]                        // 0=Sun 1=Mon … 6=Sat
+  startTime   String                       // "HH:mm" in timezone
+  durationMin Int
+  timezone    String   @default("Asia/Seoul")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([academyId, classId])
+  @@map("class_schedules")
+}
+
+/// Student enrollment in a Class.
+model ClassEnrollment {
+  id            String           @id @default(uuid())
+  academyId     String
+  classId       String
+  studentUserId String
+  status        EnrollmentStatus @default(ACTIVE)
+  enrolledAt    DateTime         @default(now())
+
+  academy Academy @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student User    @relation("EnrolledStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([academyId, classId, studentUserId])
+  @@index([academyId, classId])
+  @@index([academyId, studentUserId])
+  @@map("class_enrollments")
+}
+
+/// A single occurrence of a Class (one lesson session).
+model ClassSession {
+  id        String        @id @default(uuid())
+  academyId String
+  classId   String
+  startsAt  DateTime                        // UTC timestamp
+  endsAt    DateTime                        // UTC timestamp
+  localDate String                          // "YYYY-MM-DD" in Asia/Seoul
+  status    SessionStatus @default(SCHEDULED)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  academy     Academy      @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  class       Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attendances Attendance[]
+
+  @@unique([classId, startsAt])
+  @@index([academyId, classId, localDate])
+  @@index([academyId, localDate])
+  @@index([academyId, status])
+  @@index([academyId, localDate, status])  // KPI: session counts in range
+  @@map("class_sessions")
+}
+
+/// Attendance record for one student in one session.
+model Attendance {
+  id             String           @id @default(uuid())
+  academyId      String
+  sessionId      String
+  classId        String
+  studentUserId  String
+  status         AttendanceStatus
+  memo           String?          @db.Text
+  markedAt       DateTime?
+  markedByUserId String?
+  updatedReason  String?          @db.Text
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  academy   Academy            @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  session   ClassSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  class     Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student   User               @relation("AttendanceStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+  markedBy  User?              @relation("AttendanceMarker", fields: [markedByUserId], references: [id], onDelete: SetNull)
+  histories AttendanceHistory[]
+
+  @@unique([academyId, sessionId, studentUserId])
+  @@index([academyId, classId, studentUserId])
+  @@index([academyId, sessionId])
+  @@index([academyId, status])             // KPI: attendance rate
+  @@index([academyId, studentUserId, status]) // KPI: at-risk students
+  @@index([academyId, createdAt])          // KPI: rolling 30d
+  @@map("attendances")
+}
+
+/// Audit trail for attendance edits.
+model AttendanceHistory {
+  id           String   @id @default(uuid())
+  academyId    String
+  attendanceId String
+  editorUserId String
+  beforeJson   Json
+  afterJson    Json
+  reason       String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  academy    Academy    @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  editor     User       @relation("AttendanceEditor", fields: [editorUserId], references: [id], onDelete: Cascade)
+
+  @@index([academyId, attendanceId])
+  @@index([academyId, editorUserId])
+  @@map("attendance_histories")
+}
+
