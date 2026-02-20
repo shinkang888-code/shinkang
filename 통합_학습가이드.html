@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Steven.KANG (SHINKANG.Co.Ltd)">
+    <meta name="copyright" content="Copyright 2024 Steven.KANG (SHINKANG.Co.Ltd). All Rights Reserved.">
+    <title>바이브 코딩 전체 시리즈 - 학습 가이드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+        
+        .copyright-warning {
+            background: #dc2626;
+            color: white;
+            padding: 12px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
+            user-select: none;
+            border-radius: 8px;
+        }
+        
+        .copyright-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            user-select: none;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #1a1a1a;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        h2 {
+            color: #2563eb;
+            font-size: 1.8em;
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #2563eb;
+        }
+        
+        h3 {
+            color: #16a34a;
+            font-size: 1.4em;
+            margin: 25px 0 12px 0;
+        }
+        
+        .lecture-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .lecture-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        .lecture-table td {
+            padding: 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .lecture-table tr:hover {
+            background: #f9fafb;
+        }
+        
+        .lecture-link {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #2563eb;
+            color: white !important;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        
+        .lecture-link:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+        }
+        
+        .info-box {
+            background: #eff6ff;
+            border-left: 4px solid #2563eb;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        
+        .warning-box {
+            background: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        
+        .success-box {
+            background: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        
+        .watermark {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.75);
+            color: white;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            z-index: 9999;
+            user-select: none;
+            pointer-events: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .watermark-title {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        
+        .copyright-footer {
+            margin-top: 60px;
+            padding: 30px;
+            background: linear-gradient(135deg, #f97316 0%, #dc2626 100%);
+            color: white;
+            border-radius: 12px;
+            text-align: center;
+            user-select: none;
+        }
+        
+        .copyright-footer h3 {
+            color: white;
+            margin: 0 0 15px 0;
+            font-size: 1.3em;
+        }
+        
+        .copyright-footer a {
+            color: #ffedd5;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+        
+        ul {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .emoji {
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="copyright-warning">
+        ⚠️ 저작권 보호 안내: 이 자료는 Steven.KANG (SHINKANG.Co.Ltd)의 지식재산권입니다. 무단 전재·복제·배포 금지
+    </div>
+    
+    <div class="copyright-header">
+        <p style="margin: 0; font-weight: bold;">📋 Copyright © 2024 Steven.KANG (SHINKANG.Co.Ltd) - All Rights Reserved</p>
+        <p style="margin: 5px 0 0 0; font-size: 0.9em;">모든 강의 자료는 저작권법에 의해 보호됩니다.</p>
+    </div>
+    
+    <div class="container">
+        <h1>🎊 바이브 코딩 전체 시리즈</h1>
+        
+        <div class="info-box">
+            <h3>📚 강의 소개</h3>
+            <p>바이브 코딩은 AI를 활용한 현대적 소프트웨어 개발 방법을 배우는 완전한 커리큘럼입니다.</p>
+            <p>개발 환경 설정부터 AI 에이전트 오케스트레이션까지, 실전 프로젝트 중심의 체계적인 학습 과정입니다.</p>
+        </div>
+        
+        <h2>📖 전체 강의 목록</h2>
+        
+        <table class="lecture-table">
+            <thead>
+                <tr>
+                    <th>강의</th>
+                    <th>주제</th>
+                    <th>핵심 내용</th>
+                    <th>난이도</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>1강</strong></td>
+                    <td>바이브 코딩 입문</td>
+                    <td>개발 환경 설정, Node.js, 터미널 기초</td>
+                    <td>⭐ 입문</td>
+                </tr>
+                <tr>
+                    <td><strong>2강</strong></td>
+                    <td>웹과 IT 기초</td>
+                    <td>HTTP/HTTPS, 쿠키/세션, 프론트엔드/백엔드</td>
+                    <td>⭐⭐ 초급</td>
+                </tr>
+                <tr>
+                    <td><strong>3강</strong></td>
+                    <td>AI 에이전트와 현대 개발</td>
+                    <td>LLM vs AI 에이전트, CPU/GPU, 메모리 관리</td>
+                    <td>⭐⭐⭐ 중급</td>
+                </tr>
+                <tr>
+                    <td><strong>4강</strong></td>
+                    <td>AI 기반 개발 방법론 ⭐</td>
+                    <td>Waterfall, 분석-설계-구현, HRM 시스템</td>
+                    <td>⭐⭐⭐⭐ 중상급</td>
+                </tr>
+                <tr>
+                    <td><strong>5강</strong></td>
+                    <td>MCP와 에이전트 오케스트레이션</td>
+                    <td>Model Context Protocol, 브라우저 자동화</td>
+                    <td>⭐⭐⭐⭐⭐ 고급</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="warning-box">
+            <h3>⚠️ 중요 안내</h3>
+            <p><strong>각 강의 자료는 별도의 HTML 파일로 제공됩니다:</strong></p>
+            <ul>
+                <li>1강_바이브코딩입문.html</li>
+                <li>2강_웹과IT기초.html</li>
+                <li>3강_AI에이전트.html</li>
+                <li>4강_개발방법론.html</li>
+                <li>5강_MCP오케스트레이션.html</li>
+            </ul>
+            <p>AI Drive 폴더에서 각 파일을 다운로드하여 사용하실 수 있습니다.</p>
+        </div>
+        
+        <h2>🎯 학습 경로 추천</h2>
+        
+        <h3>입문자 경로</h3>
+        <div class="success-box">
+            <p><strong>1강 (환경 설정)</strong> → <strong>2강 (웹 기초)</strong> → <strong>3강 (AI 도구)</strong> → <strong>4강 (방법론)</strong> → <strong>5강 (고급 자동화)</strong></p>
+            <p>순서대로 학습하여 기초부터 고급까지 체계적으로 습득</p>
+        </div>
+        
+        <h3>실무자 빠른 학습</h3>
+        <div class="success-box">
+            <p><strong>3강 (도구 숙지)</strong> → <strong>4강 (프로젝트 구축)</strong> → <strong>5강 (자동화)</strong></p>
+            <p>기초 지식이 있는 경우 핵심만 빠르게 학습</p>
+        </div>
+        
+        <h3>비즈니스 중심</h3>
+        <div class="success-box">
+            <p><strong>4강 (M&A 전략 + HRM 프로젝트)</strong></p>
+            <p>실전 프로젝트와 비즈니스 전략에 집중</p>
+        </div>
+        
+        <h2>💡 각 강의의 핵심 메시지</h2>
+        
+        <table class="lecture-table">
+            <thead>
+                <tr>
+                    <th>강의</th>
+                    <th>핵심 메시지</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>1강</strong></td>
+                    <td>"터미널 공포증을 극복하라"</td>
+                </tr>
+                <tr>
+                    <td><strong>2강</strong></td>
+                    <td>"왜(Why)를 이해하는 것이 중요하다"</td>
+                </tr>
+                <tr>
+                    <td><strong>3강</strong></td>
+                    <td>"컴퓨터 과학 기초가 AI 활용의 핵심"</td>
+                </tr>
+                <tr>
+                    <td><strong>4강</strong></td>
+                    <td>"AI는 마법이 아니다, 방법론이 성공의 열쇠" ⭐</td>
+                </tr>
+                <tr>
+                    <td><strong>5강</strong></td>
+                    <td>"개발은 이제 오케스트레이션이다"</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <h2>🛠️ 프로젝트 실습 목록</h2>
+        
+        <h3>1강 - 기초 프로젝트</h3>
+        <ul>
+            <li>✅ AI 스마트 계산기</li>
+        </ul>
+        
+        <h3>2강 - 웹 기초</h3>
+        <ul>
+            <li>✅ Express 서버 구축</li>
+            <li>✅ 웹 페이지 검사 및 분석</li>
+        </ul>
+        
+        <h3>3강 - AI 도구 활용</h3>
+        <ul>
+            <li>✅ 메모 앱</li>
+            <li>✅ Todo 앱</li>
+            <li>✅ Airbnb 스타일 UI</li>
+        </ul>
+        
+        <h3>4강 - 실전 프로젝트 ⭐</h3>
+        <ul>
+            <li>✅ HRM (인사 관리 시스템) - 핵심 프로젝트</li>
+            <li>✅ Supabase 데이터베이스 연동</li>
+            <li>✅ Next.js + Prisma 풀스택 앱</li>
+        </ul>
+        
+        <h3>5강 - 고급 자동화</h3>
+        <ul>
+            <li>✅ 브라우저 자동화 (네이버/쿠팡)</li>
+            <li>✅ MCP 서버 연동</li>
+            <li>✅ 커스텀 Skills 개발</li>
+        </ul>
+        
+        <h2>📊 기술 스택 커버리지</h2>
+        
+        <h3>프론트엔드</h3>
+        <ul>
+            <li>HTML, CSS, JavaScript</li>
+            <li>React</li>
+            <li>Next.js</li>
+        </ul>
+        
+        <h3>백엔드</h3>
+        <ul>
+            <li>Node.js</li>
+            <li>Express.js</li>
+            <li>Next.js API Routes</li>
+        </ul>
+        
+        <h3>데이터베이스</h3>
+        <ul>
+            <li>PostgreSQL</li>
+            <li>Supabase</li>
+            <li>Prisma ORM</li>
+            <li>Redis</li>
+        </ul>
+        
+        <h3>AI 도구</h3>
+        <ul>
+            <li>Claude Code</li>
+            <li>Claude-Chrome-Skills</li>
+            <li>Octo Terminal</li>
+            <li>DeepSeek API</li>
+            <li>Alibaba Qwen</li>
+        </ul>
+        
+        <h2>🏆 학습 후 기대 효과</h2>
+        
+        <h3>기술적 역량</h3>
+        <ul>
+            <li>✅ AI 도구를 활용한 빠른 개발</li>
+            <li>✅ 풀스택 웹 애플리케이션 구축</li>
+            <li>✅ 체계적인 프로젝트 설계 능력</li>
+            <li>✅ 브라우저 자동화 및 크롤링</li>
+        </ul>
+        
+        <h3>비즈니스 역량</h3>
+        <ul>
+            <li>✅ M&A를 고려한 프로젝트 구조화</li>
+            <li>✅ B2B SaaS 비즈니스 모델 이해</li>
+            <li>✅ 비용 최적화 전략</li>
+            <li>✅ Exit 전략 수립</li>
+        </ul>
+        
+        <h3>실무 적용</h3>
+        <ul>
+            <li>✅ 1일 내 MVP 개발 가능</li>
+            <li>✅ 문서 기반 팀 협업</li>
+            <li>✅ AI 에이전트 오케스트레이션</li>
+            <li>✅ 업무 자동화 구현</li>
+        </ul>
+        
+        <h2>📌 추천 학습 순서</h2>
+        
+        <h3>전체 과정 (권장)</h3>
+        <div class="info-box">
+            <ul>
+                <li><strong>1주차:</strong> 1강 + 2강 (기초 다지기)</li>
+                <li><strong>2주차:</strong> 3강 (도구 익히기)</li>
+                <li><strong>3주차:</strong> 4강 (방법론 + 프로젝트) ⭐⭐⭐</li>
+                <li><strong>4주차:</strong> 5강 (고급 자동화)</li>
+            </ul>
+        </div>
+        
+        <h3>속성 과정 (실무자)</h3>
+        <div class="info-box">
+            <ul>
+                <li><strong>Day 1:</strong> 3강 (도구 숙지)</li>
+                <li><strong>Day 2-3:</strong> 4강 (HRM 프로젝트 구축)</li>
+                <li><strong>Day 4:</strong> 5강 (자동화 적용)</li>
+            </ul>
+        </div>
+        
+        <h2>💬 학습 팁</h2>
+        
+        <ol>
+            <li><strong>순서대로 학습하세요:</strong> 각 강의는 이전 강의를 기반으로 합니다.</li>
+            <li><strong>실습을 반드시 하세요:</strong> 이론만으로는 부족합니다.</li>
+            <li><strong>문서화하세요:</strong> 4강의 Living Document 개념이 핵심입니다.</li>
+            <li><strong>비용을 고려하세요:</strong> 4강의 API 최적화 전략을 활용하세요.</li>
+            <li><strong>비즈니스를 생각하세요:</strong> 기술만이 아닌 가치 창출을 목표로 하세요.</li>
+        </ol>
+        
+        <div class="success-box">
+            <h3>✨ 시작하기</h3>
+            <p>지금 바로 <strong>1강_바이브코딩입문.html</strong> 파일을 열어 학습을 시작하세요!</p>
+            <p><strong>모든 학습자료는:</strong></p>
+            <ul>
+                <li>📱 웹 브라우저에서 바로 열람 가능</li>
+                <li>🖨️ 인쇄 또는 PDF 저장 가능</li>
+                <li>🔗 AI Drive를 통해 공유 가능</li>
+                <li>🔄 언제든지 재접근 가능</li>
+            </ul>
+        </div>
+        
+        <div class="warning-box" style="margin-top: 40px;">
+            <h3>📧 문의 및 연락처</h3>
+            <p><strong>강사:</strong> Steven.KANG (SHINKANG.Co.Ltd)</p>
+            <p><strong>이메일:</strong> shinkang888@gmail.com</p>
+            <p><strong>DM:</strong> <a href="https://www.threads.com/@shinkang88" target="_blank" style="color: #dc2626;">https://www.threads.com/@shinkang88</a></p>
+        </div>
+    </div>
+    
+    <div class="watermark">
+        <div class="watermark-title">Authorized Copy</div>
+        <div style="font-size: 0.85em;">© 2024 Steven.KANG</div>
+        <div style="font-size: 0.75em; opacity: 0.9;">SHINKANG.Co.Ltd</div>
+        <div style="font-size: 0.7em; margin-top: 3px; opacity: 0.8;">shinkang888@gmail.com</div>
+    </div>
+    
+    <div class="copyright-footer">
+        <h3>📜 저작권 및 법적 고지</h3>
+        
+        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 8px; margin: 15px 0;">
+            <p style="margin: 5px 0; font-weight: bold; font-size: 1.15em;">Copyright © 2024 Steven.KANG (SHINKANG.Co.Ltd)</p>
+            <p style="margin: 5px 0; font-size: 1.05em;">All Rights Reserved. 모든 권리 보유.</p>
+        </div>
+        
+        <div style="margin: 20px 0; line-height: 1.9; font-size: 1.05em;">
+            <p style="margin: 8px 0;">📧 <strong>E-mail:</strong> <a href="mailto:shinkang888@gmail.com">shinkang888@gmail.com</a></p>
+            <p style="margin: 8px 0;">💬 <strong>DM:</strong> <a href="https://www.threads.com/@shinkang88" target="_blank">https://www.threads.com/@shinkang88</a></p>
+        </div>
+        
+        <div style="margin-top: 25px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.95em; line-height: 1.7; border: 2px solid rgba(255,255,255,0.2);">
+            <p style="margin: 8px 0; font-weight: bold; font-size: 1.05em;">⚠️ 저작권 보호 및 법적 고지</p>
+            <p style="margin: 8px 0;">본 강의 시리즈의 모든 자료는 대한민국 저작권법 및 국제 저작권 협약에 의해 보호됩니다.</p>
+            <p style="margin: 8px 0;">🚫 <strong>금지 사항:</strong> 무단 전재, 복제, 배포, 2차 저작물 작성, 상업적 이용</p>
+            <p style="margin: 8px 0;">✅ <strong>허용 범위:</strong> 개인 학습 목적의 열람 및 인쇄</p>
+            <p style="margin: 8px 0;">📝 <strong>상업적 이용:</strong> 사전 서면 동의 필수</p>
+            <p style="margin: 10px 0; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.3); font-weight: bold;">⚖️ 본 자료의 무단 사용 시 민형사상 법적 책임을 물을 수 있습니다.</p>
+        </div>
+        
+        <p style="margin-top: 20px; font-size: 0.95em; opacity: 0.95; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+            바이브 코딩 전체 시리즈 (1강~5강) 및 통합 학습 가이드 모두 Steven.KANG (SHINKANG.Co.Ltd)의 지식재산권입니다.
+        </p>
+    </div>
+</body>
+</html>
