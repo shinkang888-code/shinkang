@@ -1,0 +1,517 @@
+// Prisma Schema - Piano Academy Management System
+// Multi-tenancy: Studio → Admin → Students
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// 1. USER & AUTH
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String?   // hashed, null for OAuth
+  role          Role      @default(STUDENT)
+  phone         String?
+  profileImage  String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // NextAuth
+  accounts      Account[]
+  sessions      Session[]
+
+  // Relations
+  adminStudios     Studio[]          @relation("StudioAdmin")
+  teacherStudios   StudioTeacher[]
+  student          Student?
+  kakaoLink        KakaoLink?
+  practiceComments PracticeComment[] @relation("PracticeCommentAuthor")
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+// NextAuth Account (OAuth)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// NextAuth Session
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// NextAuth VerificationToken
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────────
+// 2. KAKAO INTEGRATION
+// ─────────────────────────────────────────────
+
+model KakaoLink {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  kakaoId        String   @unique
+  accessToken    String   @db.Text
+  refreshToken   String   @db.Text
+  tokenExpiresAt DateTime
+  scopes         String[] // consented scopes
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("kakao_links")
+}
+
+// ─────────────────────────────────────────────
+// 3. STUDIO (학원) — Multi-tenancy root
+// ─────────────────────────────────────────────
+
+model Studio {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  phone       String?
+  logoUrl     String?
+  adminId     String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  admin              User                @relation("StudioAdmin", fields: [adminId], references: [id])
+  students           Student[]
+  teachers           StudioTeacher[]
+  lessons            Lesson[]
+  notices            Notice[]
+  practiceThreads    PracticeThread[]
+  practicePosts      PracticePost[]
+  practiceRecordings PracticeRecording[]
+  practiceComments   PracticeComment[]
+  practiceGoals      PracticeGoalSetting[]
+
+  @@map("studios")
+}
+
+// ─────────────────────────────────────────────
+// 3b. STUDIO TEACHER (강사)
+// ─────────────────────────────────────────────
+
+model StudioTeacher {
+  id        String   @id @default(cuid())
+  studioId  String
+  userId    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studio Studio @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([studioId, userId])
+  @@index([studioId])
+  @@map("studio_teachers")
+}
+
+// ─────────────────────────────────────────────
+// 4. STUDENT (원생)
+// ─────────────────────────────────────────────
+
+model Student {
+  id            String        @id @default(cuid())
+  userId        String        @unique
+  studioId      String
+  studentCode   String?       // 학원 내부 코드
+  grade         String?       // 학년/레벨
+  parentName    String?
+  parentPhone   String?
+  enrolledAt    DateTime      @default(now())
+  memo          String?       @db.Text
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studio           Studio            @relation(fields: [studioId], references: [id])
+  lessonSchedules  LessonSchedule[]
+  payments         Payment[]
+  practiceSessions PracticeSession[]
+  kakaoNotifications KakaoNotification[]
+  practiceThreads    PracticeThread[]
+  practicePosts      PracticePost[]
+  practiceRecordings PracticeRecording[]
+  practiceGoals      PracticeGoalSetting[]
+
+  @@map("students")
+}
+
+// ─────────────────────────────────────────────
+// 5. LESSON (레슨 마스터 — 반복 일정)
+// ─────────────────────────────────────────────
+
+model Lesson {
+  id          String      @id @default(cuid())
+  studioId    String
+  title       String
+  description String?     @db.Text
+  dayOfWeek   Int?        // 0=Sun ~ 6=Sat, null=비정기
+  startTime   String?     // "HH:mm"
+  endTime     String?     // "HH:mm"
+  color       String?     @default("#4F46E5")
+  isRecurring Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  studio    Studio           @relation(fields: [studioId], references: [id])
+  schedules LessonSchedule[]
+
+  @@map("lessons")
+}
+
+// ─────────────────────────────────────────────
+// 6. LESSON SCHEDULE (개별 레슨 인스턴스)
+// ─────────────────────────────────────────────
+
+model LessonSchedule {
+  id          String         @id @default(cuid())
+  lessonId    String
+  studentId   String
+  startAt     DateTime
+  endAt       DateTime
+  status      ScheduleStatus @default(SCHEDULED)
+  memo        String?        @db.Text
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  lesson  Lesson  @relation(fields: [lessonId], references: [id])
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, startAt])
+  @@index([lessonId, startAt])
+  @@map("lesson_schedules")
+}
+
+enum ScheduleStatus {
+  SCHEDULED   // 예정
+  COMPLETED   // 완료
+  CANCELLED   // 취소
+  ABSENT      // 결석
+}
+
+// ─────────────────────────────────────────────
+// 7. PAYMENT (수강료 및 납부)
+// ─────────────────────────────────────────────
+
+model Payment {
+  id             String        @id @default(cuid())
+  studentId      String
+  amount         Int           // 원 단위
+  billingMonth   String        // "YYYY-MM"
+  dueDate        DateTime      // 납부 예정일
+  paidAt         DateTime?     // 실제 납부일
+  status         PaymentStatus @default(PENDING)
+  method         PaymentMethod?
+  memo           String?       @db.Text
+  receiptUrl     String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  student              Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  kakaoNotifications   KakaoNotification[]
+
+  @@index([studentId, billingMonth])
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING    // 미납
+  PAID       // 납부완료
+  OVERDUE    // 연체
+  CANCELLED  // 취소/환불
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+// ─────────────────────────────────────────────
+// 8. PRACTICE SESSION (연습 세션)
+// ─────────────────────────────────────────────
+
+model PracticeSession {
+  id          String    @id @default(cuid())
+  studentId   String
+  startedAt   DateTime
+  endedAt     DateTime?
+  durationMin Int?      // 종료 시 자동 계산 (분)
+  piece       String?   // 연습 곡명
+  memo        String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, startedAt])
+  @@map("practice_sessions")
+}
+
+// ─────────────────────────────────────────────
+// 9. KAKAO NOTIFICATION (발송 이력)
+// ─────────────────────────────────────────────
+
+model KakaoNotification {
+  id          String             @id @default(cuid())
+  studentId   String
+  paymentId   String?
+  type        NotificationType
+  status      NotificationStatus @default(PENDING)
+  message     String             @db.Text
+  sentAt      DateTime?
+  errorMsg    String?
+  createdAt   DateTime           @default(now())
+
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([studentId, createdAt])
+  @@map("kakao_notifications")
+}
+
+enum NotificationType {
+  PAYMENT_DUE       // 납부 예정 알림
+  PAYMENT_OVERDUE   // 미납 알림
+  LESSON_REMINDER   // 레슨 리마인드
+  GENERAL           // 일반 공지
+}
+
+enum NotificationStatus {
+  PENDING   // 발송 대기
+  SENT      // 발송 완료
+  FAILED    // 발송 실패
+  SKIPPED   // 스킵 (동의 없음 등)
+}
+
+// ─────────────────────────────────────────────
+// 10. NOTICE (공지사항)
+// ─────────────────────────────────────────────
+
+model Notice {
+  id        String   @id @default(cuid())
+  studioId  String
+  title     String
+  content   String   @db.Text
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studio Studio @relation(fields: [studioId], references: [id])
+
+  @@map("notices")
+}
+
+// ═══════════════════════════════════════════════════════════
+// 피아노 연습 도메인 (Practice Domain)
+// ═══════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────
+// 11. PRACTICE THREAD (날짜 단위 스레드)
+// ─────────────────────────────────────────────
+model PracticeThread {
+  id        String   @id @default(cuid())
+  studioId  String
+  studentId String
+  date      String   // YYYY-MM-DD
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studio  Studio  @relation(fields: [studioId], references: [id])
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  posts    PracticePost[]
+  comments PracticeComment[]
+
+  @@unique([studioId, studentId, date])
+  @@index([studioId, studentId])
+  @@index([studioId, date])
+  @@map("practice_threads")
+}
+
+// ─────────────────────────────────────────────
+// 12. PRACTICE POST (타임라인 카드)
+// ─────────────────────────────────────────────
+model PracticePost {
+  id        String      @id @default(cuid())
+  threadId  String
+  studioId  String
+  studentId String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  pieceTitle    String
+  practiceCount Int     @default(1)
+  note          String? @db.Text
+  status        PracticePostStatus @default(DRAFT)
+
+  lastRecordingId  String?
+  reviewResult     ReviewResult?
+  reviewComment    String?       @db.Text
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+
+  thread     PracticeThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  studio     Studio            @relation(fields: [studioId], references: [id])
+  student    Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  recordings PracticeRecording[]
+  comments   PracticeComment[]
+
+  @@index([threadId])
+  @@index([studioId, studentId])
+  @@index([studioId, status])
+  @@map("practice_posts")
+}
+
+enum PracticePostStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+}
+
+enum ReviewResult {
+  OK
+  NG
+}
+
+// ─────────────────────────────────────────────
+// 13. PRACTICE RECORDING (최소용량 음원)
+// ─────────────────────────────────────────────
+model PracticeRecording {
+  id        String   @id @default(cuid())
+  postId    String
+  studioId  String
+  studentId String
+  createdAt DateTime @default(now())
+
+  storageKey  String
+  mimeType    String
+  codec       String?
+  durationSec Float
+  sizeBytes   Int
+
+  post    PracticePost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  studio  Studio       @relation(fields: [studioId], references: [id])
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studioId, storageKey])
+  @@index([postId])
+  @@map("practice_recordings")
+}
+
+// ─────────────────────────────────────────────
+// 14. PRACTICE COMMENT (교사 지시 + Q&A)
+// ─────────────────────────────────────────────
+model PracticeComment {
+  id           String   @id @default(cuid())
+  studioId     String
+  threadId     String
+  postId       String?
+  authorUserId String
+  authorRole   String   // ADMIN | TEACHER | STUDENT (snapshot)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  body   String             @db.Text
+  type   PracticeCommentType @default(GENERAL)
+  pinned Boolean            @default(false)
+
+  parentId String?
+
+  thread  PracticeThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  post    PracticePost?     @relation(fields: [postId], references: [id], onDelete: SetNull)
+  author  User              @relation("PracticeCommentAuthor", fields: [authorUserId], references: [id])
+  studio  Studio            @relation(fields: [studioId], references: [id])
+  parent  PracticeComment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies PracticeComment[] @relation("CommentReplies")
+
+  @@index([threadId, pinned])
+  @@index([postId])
+  @@index([studioId, threadId])
+  @@map("practice_comments")
+}
+
+enum PracticeCommentType {
+  GENERAL
+  INSTRUCTION
+  QUESTION
+  ANSWER
+}
+
+// ─────────────────────────────────────────────
+// 15. PRACTICE GOAL SETTING (주간 목표)
+// ─────────────────────────────────────────────
+model PracticeGoalSetting {
+  id              String   @id @default(cuid())
+  studioId        String
+  studentId       String?  // null = 학원 기본값
+  weekTargetCount Int      @default(3)
+  basis           GoalBasis @default(SUBMISSION)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  studio  Studio   @relation(fields: [studioId], references: [id])
+  student Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studioId, studentId])
+  @@map("practice_goal_settings")
+}
+
+enum GoalBasis {
+  SUBMISSION
+  POST
+}
