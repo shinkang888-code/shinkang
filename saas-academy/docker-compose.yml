@@ -1,0 +1,60 @@
+services:
+  # ── PostgreSQL 15 ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: saas_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-saas_academy}
+      POSTGRES_USER:     ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres123}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-saas_academy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── pgAdmin 4 (optional – comment out to skip) ───────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: saas_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    ${PGADMIN_EMAIL:-admin@local.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-pgadmin123}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools          # only starts with: docker compose --profile tools up
+
+  # ── Next.js App ──────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: saas_app
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      # Override DATABASE_URL to use the docker service name
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-saas_academy}?schema=public"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local

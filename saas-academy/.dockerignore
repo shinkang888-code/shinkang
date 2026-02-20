@@ -1,0 +1,51 @@
+# Dependencies
+node_modules
+.npm
+
+# Next.js build output
+.next
+out
+
+# Prisma generated client (rebuilt inside Docker)
+node_modules/.prisma
+
+# Environment files (secrets should never be baked into image)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+docker-entrypoint.sh
+
+# Tests
+tests
+playwright-report
+test-results
+
+# Dev tooling
+*.md
+.eslintrc*
+vitest.config.ts
+playwright.config.ts
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
